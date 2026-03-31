@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RUBBY CAFE | QR MENÜ</title>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
+    <style>
+        :root {
+            --rubby-green: #2e7d32;
+            --soft-white: #fdfdfd;
+            --text-dark: #2c3e50;
+            --accent-green: #4caf50;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f7f6;
+            margin: 0;
+            color: var(--text-dark);
+            padding-bottom: 100px;
+        }
+
+        header {
+            background-color: var(--rubby-green);
+            color: white;
+            text-align: center;
+            padding: 30px 10px;
+            border-radius: 0 0 25px 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .category-section {
+            margin: 20px 15px;
+        }
+
+        .category-title {
+            background-color: var(--rubby-green);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .menu-grid {
+            display: grid;
+            gap: 10px;
+        }
+
+        .menu-item {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid #eee;
+        }
+
+        .item-info span {
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        .add-btn {
+            background-color: var(--accent-green);
+            color: white;
+            border: none;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            font-size: 20px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .add-btn:active { transform: scale(0.9); }
+
+        /* Alt Sepet Çubuğu */
+        .footer-control {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            background: white;
+            box-shadow: 0 -5px 20px rgba(0,0,0,0.1);
+            padding: 15px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 1000;
+        }
+
+        .footer-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .table-input {
+            padding: 10px;
+            border: 2px solid var(--rubby-green);
+            border-radius: 8px;
+            width: 45%;
+            font-weight: bold;
+        }
+
+        .send-order-btn {
+            background: var(--rubby-green);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-weight: bold;
+            flex-grow: 1;
+            margin-left: 10px;
+        }
+
+        .cart-status {
+            font-size: 0.85rem;
+            color: #666;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1 style="margin:0; letter-spacing: 2px;">RUBBY CAFE</h1>
+    <p style="margin:5px 0 0; opacity: 0.8;">Dijital QR Menü Sistemi</p>
+</header>
+
+<div id="menu-container"></div>
+
+<div class="footer-control">
+    <div class="footer-row">
+        <select id="masaNo" class="table-input">
+            <option value="">Masa Seçin</option>
+            <script>
+                for(let i=1; i<=30; i++) document.write(`<option value="${i}">Masa ${i}</option>`);
+            </script>
+        </select>
+        <button class="send-order-btn" onclick="siparisGonder()">SİPARİŞİ TAMAMLA</button>
+    </div>
+    <div class="cart-status" id="sepetBilgi">Henüz ürün seçilmedi</div>
+</div>
+
+<script>
+    // --- MENÜ VERİSİ ---
+    const menuData = {
+        "KAHVALTI": ["SERPME KAHVALTI", "KAHVALTI TABAĞI", "KARIŞIK TOST", "KAŞARLI TOST", "KOMBO TABAĞI", "MENEMEN", "NUGGET TABAĞI", "PATATESLİ OMLET", "YENGEN TOST", "SEBZELİ OMLET", "SİGARA BÖREĞİ", "SOSİS TABAĞI", "SUCUKLU MENEMEN", "SUCUKLU TOST", "SUCUKLU YUMURTA"],
+        "MAKARNA ÇEŞİTLERİ": ["BARBEKÜ SOSLU PENNE", "CEDAR SOSLU FETTUCCINE", "FETTUCINE", "KÖRİ SOSLU PENNE", "KREMALI PENNE", "MANTI", "MEXICA SOSLU MAKARNA", "PENNE ARRABIATA", "SPAGETTİ BOLOGNESE"],
+        "BURGER": ["ALFA ÇİZBURGER", "ALFA HAMBURGER", "CHICKEN BURGER", "SHINITZEL", "CHICKEN ÇİZBURGER", "ISLAK HAMBURGER", "ÖĞRENCİ MENÜ BURGER"],
+        "STEAK": ["ANTRİKOT", "BONFİLE"],
+        "TATLILAR": ["ANTEP FISTIKLI BALERİN", "ANTEP FISTIKLI CUP", "ANTEP GISTIKLI SUFFLE", "BELÇİKA ÇİKOLATALI PASTA", "BROWNİ DOUBLE PASTA", "ÇİKOLATALI CHEESECAKE", "FISTIK RÜYASI", "FRANBUAZLI CHEESECAKE", "GÖKKUŞAĞI PASTA", "LIMONLU CHEESECAKE", "LOTUS CHEESCAKE", "LOVE PASTA", "MONO FRANBUAZ ŞELALE", "MONO LATTE", "ORMAN MEYVELİ PASTA", "PISTACHIOS", "RED VELVET PASTA", "SUFFLE", "SAN SEBASTIAN", "TİRAMİSU", "WAFFLE"],
+        "ATIŞTIRMALIK": ["ÇEREZ TABAĞI", "ÇOBAN SALATASI", "KUMRU", "MEYVE TABAĞI", "PATSO"],
+        "İÇECEKLER": ["AMERICANO", "CAFE LATTE", "CAPPUCINO", "DOUBLE ESPRESSO", "ESPRESSO", "BRAZILIAN SANTOS", "COLOMBIA SUPREMO", "FİLTRE KAHVE", "SÜTLÜ FİLTRE KAHVE", "GOLD KAHVELİ SPECIAL", "ORALET", "SALEP", "SICAK BEYAZ ÇİKOLATA", "HOT CARAMEL MACCHIATO", "HOT WHITE CHOCOLATE MC.", "KARAMEL LATTE", "MOCHA", "NESCAFE (GOLD KAHVE)", "SÜTLÜ KÖPÜKLÜ NESCAFE", "BİTKİ ÇAYI", "ÇAY", "DAMLA SAKIZLI SALEP", "FİNCAN ÇAY", "FİNCAN SICAK ÇAY", "SICAK ÇİKOLATA", "SÜTLÜ ÇAY"],
+        "SOĞUK İÇECEKLER": ["ENERJİ KOKTEYL", "GÖKKUŞAĞI KOKTEYL", "ATOM FINDIKLI ENEJİ İÇ.", "ATOM FINDIKLI MEYVE SUYU", "AYRAN", "BLUE ENERJİ", "KOLA", "COOL LIME", "ÇİLEKLİ KUTU SÜT", "ÇİLEKLİ LİMONATA", "DOUBLE REDBULL", "FANTA", "FINDIKLI MEYVELİ SÜT", "GAZOZ", "ICE TEA", "BLUE BERYKOKTEYL", "CHURCHILL", "MEYVE KOKTEYL", "DOUBLE CHURCHILL", "KARIŞIK MEYVE SUYU", "LİMONATA", "MEYVE SUYU", "MEYVELİ SODA", "MUZLU SÜT", "PORTAKAL SUYU", "REDBULL BÜYÜK", "REDBULL", "SADE SODA", "SU", "ŞEFTALİ MEYVE SUYU"],
+        "ICE COFFEE": ["AFFOGATO", "ÇİKOLATALI FRAPPE", "ÇİLEKLİ LATTE", "ICE AMERICANO", "ICE CAFE LATTE", "ICE CAPPUCINO", "ICE MOCHA", "ICE NUT CAFE", "ICE WHITE MOCHA", "KARAMEL FRAPPE", "OREO FRAPPE", "ICE CARAMEL MACCHIATO"],
+        "MILKSHAKE": ["DONDURMALI MILKSHAKE", "ANANAS ÇİLEK FROZEN", "BÖĞÜRTLENLİ MILKSHAKE", "ÇİKOLATA MUZ MIKSHAKE", "ÇİLEK MUZ FROZEN", "KIRMIZI ORMAN MEYVELİ", "MANGO FROZEN", "NOGGER MILKSHAKE", "OREOLU MILKSHAKE", "VANİLYALI MILKSHAKE", "ÇİLEK MUZ MILKSHAKE", "KARAMEL MILKSHAKE"],
+        "SMOOTHIE": ["ÇİLEK SMOOTHIE", "ELMA SMOOTHIE", "KIRMIZI ORMAN MEYVELİ", "KİVİ SMOOTHE", "MUZ SMOOTHIE", "ORMAN MEYVELİ SMO.", "SPECIAL SMOOTHIE", "ŞEFTALİ SMOOTHIE"],
+        "TÜRK KAHVESİ": ["ÇİKOLATALI TÜRK KAHVESİ", "DİBEK KAHVESİ", "KOYU TÜRK KAHVESİ", "KOYU TÜRK K. SÜVARİ", "OSMANLI KAHVESİ", "SÜTLÜ MENENGİÇ KAHVESİ", "SÜTLÜ SÜVARİ TÜK KAHVESİ", "SÜVARİ TÜRK KAHVESİ", "TÜRK KAHVESİ"],
+        "NARGİLE": ["ANANASLI MEYVELİ AROM.", "ANASON ELMA", "BUZLU NARGİLE", "CAPPUCINO", "ÇİLEK AROMALI", "DEJATLUE", "EGZOTICA", "İZMİR ROMANTİK", "KARIŞIK MEYVE AROMALI", "YABAN MERSİNİ"]
+    };
+
+    // --- ARAYÜZ OLUŞTURMA ---
+    const container = document.getElementById('menu-container');
+    let sepet = [];
+
+    for (const [category, items] of Object.entries(menuData)) {
+        let section = document.createElement('div');
+        section.className = 'category-section';
+        
+        let html = `<div class="category-title">${category} <span>${items.length}</span></div><div class="menu-grid">`;
+        
+        items.forEach(item => {
+            html += `
+                <div class="menu-item">
+                    <div class="item-info"><span>${item}</span></div>
+                    <button class="add-btn" onclick="sepeteEkle('${item}')">+</button>
+                </div>`;
+        });
+        
+        html += `</div>`;
+        section.innerHTML = html;
+        container.appendChild(section);
+    }
+
+    // --- SEPET VE FİREBASE ---
+    // ÖNEMLİ: Kendi Firebase config bilgilerinizi buraya ekleyin
+    const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        databaseURL: "YOUR_DATABASE_URL",
+        projectId: "YOUR_PROJECT_ID"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    function sepeteEkle(urun) {
+        sepet.push(urun);
+        document.getElementById('sepetBilgi').innerText = sepet.length + " ürün seçildi.";
+    }
+
+    function siparisGonder() {
+        const masa = document.getElementById('masaNo').value;
+        if (!masa) { alert("Lütfen masa numaranızı seçin!"); return; }
+        if (sepet.length === 0) { alert("Sepetiniz boş!"); return; }
+
+        const yeniSiparisRef = database.ref('siparisler').push();
+        yeniSiparisRef.set({
+            masa: masa,
+            urunler: sepet,
+            zaman: new Date().toLocaleTimeString(),
+            durum: "Yeni"
+        }).then(() => {
+            alert("Siparişiniz başarıyla mutfağa iletildi!");
+            sepet = [];
+            document.getElementById('sepetBilgi').innerText = "Henüz ürün seçilmedi";
+        });
+    }
+</script>
+
+</body>
+</html>
